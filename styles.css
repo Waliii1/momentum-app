@@ -424,6 +424,13 @@ h3,
   opacity: 0.52;
 }
 
+.day-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
 .all-time-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
