@@ -1,4 +1,16 @@
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const toDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const dateFromKey = (key) => {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const todayKey = () => toDateKey(new Date());
 
 const MINIMUM_XP = 20;
 const IDEAL_XP = MINIMUM_XP * 2;
@@ -365,6 +377,7 @@ const defaultState = {
 
 let state = loadState();
 let activeTab = "home";
+let selectedDate = todayKey();
 syncMomentum();
 
 function loadState() {
@@ -389,7 +402,7 @@ function getHabit(habitId) {
   return habits.find((habit) => habit.id === habitId);
 }
 
-function recordFor(habitId, date = todayKey()) {
+function recordFor(habitId, date = selectedDate) {
   const value = state.completions[date]?.[habitId];
 
   if (value === true) {
@@ -405,25 +418,25 @@ function recordFor(habitId, date = todayKey()) {
   return value || { minimum: {}, ideal: {}, minRewarded: false, idealRewarded: false };
 }
 
-function isStepDone(habitId, type, index, date = todayKey()) {
+function isStepDone(habitId, type, index, date = selectedDate) {
   return Boolean(recordFor(habitId, date)[type]?.[index]);
 }
 
-function isMinimumComplete(habitId, date = todayKey()) {
+function isMinimumComplete(habitId, date = selectedDate) {
   const habit = getHabit(habitId);
   return habit.minimum.every((_, index) => isStepDone(habitId, "minimum", index, date));
 }
 
-function isIdealComplete(habitId, date = todayKey()) {
+function isIdealComplete(habitId, date = selectedDate) {
   const habit = getHabit(habitId);
   return isMinimumComplete(habitId, date) && habit.ideal.every((_, index) => isStepDone(habitId, "ideal", index, date));
 }
 
-function completedToday() {
-  return habits.filter((habit) => isMinimumComplete(habit.id));
+function completedForDate(date = selectedDate) {
+  return habits.filter((habit) => isMinimumComplete(habit.id, date));
 }
 
-function completionRatio(date = todayKey()) {
+function completionRatio(date = selectedDate) {
   const count = habits.filter((habit) => isMinimumComplete(habit.id, date)).length;
   return count / habits.length;
 }
@@ -622,7 +635,7 @@ function getLevelFromMomentum(momentum) {
 }
 
 function toggleStep(habitId, type, index) {
-  const date = todayKey();
+  const date = selectedDate;
   state.completions[date] = state.completions[date] || {};
 
   const habit = getHabit(habitId);
@@ -691,10 +704,33 @@ function setTab(tab) {
 }
 
 function resetToday() {
-  state.completions[todayKey()] = {};
+  state.completions[selectedDate] = {};
   syncMomentum();
   saveState();
   render();
+}
+
+function moveSelectedDay(offset) {
+  const date = dateFromKey(selectedDate);
+  date.setDate(date.getDate() + offset);
+  selectedDate = toDateKey(date);
+  render();
+}
+
+function jumpToToday() {
+  selectedDate = todayKey();
+  render();
+}
+
+function selectedDateLabel() {
+  const date = dateFromKey(selectedDate);
+  const label = date.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  return selectedDate === todayKey() ? `Today · ${label}` : label;
 }
 
 function buyReward(rewardId) {
@@ -748,10 +784,10 @@ function purchasesInLastDays(rewardId, days) {
 function render() {
   syncMomentum();
   const { level, current, target, needed, progress } = levelInfo();
-  const done = completedToday();
-  const ratio = completionRatio();
-  const quote = quotes[new Date().getDay() % quotes.length];
-  const recovery = perfectStreak() === 0 && Object.keys(state.completions).length > 0;
+  const done = completedForDate(selectedDate);
+  const ratio = completionRatio(selectedDate);
+  const quote = quotes[dateFromKey(selectedDate).getDay() % quotes.length];
+  const recovery = !daySuccess(selectedDate) && Object.keys(state.completions).length > 0;
   if (activeTab === "settings") activeTab = "shop";
   if (activeTab === "quests" || activeTab === "progress" || activeTab === "calendar") activeTab = "home";
 
@@ -766,11 +802,7 @@ function render() {
         </div>
         <div class="header-meta">
           <span class="badge momentum-badge">✦ ${state.momentum} Available</span>
-          <p class="date">${new Date().toLocaleDateString(undefined, {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}</p>
+          <p class="date">${selectedDateLabel()}</p>
         </div>
       </header>
 
@@ -816,12 +848,12 @@ function screenHome({ level, current, target, needed, progress, done, ratio, quo
           </div>
           <p class="quote">${quote}</p>
           <div class="stats">
-            <div class="stat"><span class="muted">Today</span><strong>${done.length}/${habits.length}</strong></div>
+            <div class="stat"><span class="muted">${selectedDate === todayKey() ? "Today" : "Selected day"}</span><strong>${done.length}/${habits.length}</strong></div>
             <div class="stat"><span class="muted">All-time</span><strong>${state.allTimeMomentum}</strong></div>
             <div class="stat"><span class="muted">Available</span><strong>${state.momentum}</strong></div>
             <div class="stat"><span class="muted">🔥 Perfect streak</span><strong>${perfectStreak()}</strong></div>
             <div class="stat"><span class="muted">★ Best streak</span><strong>${bestStreak()}</strong></div>
-            <div class="stat"><span class="muted">Minimums done</span><strong>${totalMinimumStepsDone()}/${totalMinimumSteps()}</strong></div>
+            <div class="stat"><span class="muted">Minimums done</span><strong>${totalMinimumStepsDone(selectedDate)}/${totalMinimumSteps()}</strong></div>
           </div>
         </div>
 
@@ -831,9 +863,14 @@ function screenHome({ level, current, target, needed, progress, done, ratio, quo
             <p class="muted">No punishment. Win the next minimum and keep moving.</p>
           </div>
           <div class="card">
-            <p class="eyebrow">Today's Mission</p>
-            <h2>Complete the minimums.</h2>
-            <p class="muted">Check each requirement. Ideals unlock after the quest evolves.</p>
+            <p class="eyebrow">Daily Editor</p>
+            <h2>${selectedDateLabel()}</h2>
+            <p class="muted">Move between days and edit minimums or ideals for that date.</p>
+            <div class="day-controls">
+              <button class="secondary" onclick="moveSelectedDay(-1)">Previous</button>
+              <button class="secondary" onclick="jumpToToday()">Today</button>
+              <button class="secondary" onclick="moveSelectedDay(1)">Next</button>
+            </div>
           </div>
         </div>
       </div>
@@ -842,7 +879,7 @@ function screenHome({ level, current, target, needed, progress, done, ratio, quo
         <div class="quest-head">
           <div>
             <p class="eyebrow">Quick Quests</p>
-            <h2>Finish each checklist to evolve the quest</h2>
+            <h2>Finish each checklist for ${selectedDateLabel()}</h2>
           </div>
           <span class="badge">${Math.round(ratio * 100)}%</span>
         </div>
