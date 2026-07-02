@@ -34,7 +34,7 @@ const habits = [
     name: "Coding",
     icon: "⌘",
     minimum: ["Open coding environment", "Code for 5 minutes"],
-    ideal: ["1-3 focused hours", "Ship one small improvement"],
+    ideal: ["1-3 focused hours"],
   },
   {
     id: "math",
